@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+k8s-mutate-registry
 
 # Test binary, built with `go test -c`
 *.test
@@ -13,3 +14,9 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+#cert and key file
+*.cert
+*.pem
+*.csr
+*.caBundle

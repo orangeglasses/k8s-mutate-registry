@@ -1,0 +1,7 @@
+{
+    "defaultDomain": "registry-1.docker.io",
+    "domainMapping": {
+        "registry-1.docker.io": "internal-docker.example.internal",
+        "quay.io": "internal-quay.example.internal"
+    }
+}

@@ -13,8 +13,8 @@ import (
 
 //MutatorConfig contains the config for the mutator
 type MutatorConfig struct {
-	AllowedDomains []string `json:"allowedDomains"`
-	DefaultDomain  string   `json:"defaultDomain"`
+	DefaultDomain string            `json:"defaultDomain,omitempty"` // defaultDomain is supposed to be mapped as well. For example: defaultdomain could be registry-1.docker.io, the map resgirty-1.docker.io to wherever it need to go
+	DomainMapping map[string]string `json:"domainMapping"`
 }
 
 //Mutator mutates
@@ -29,20 +29,17 @@ func newMutator(configJSON string) (Mutator, error) {
 		return Mutator{}, fmt.Errorf("error parsing configJSON: %v", err)
 	}
 
-	return Mutator{config: config}, nil
-
-}
-
-func (m Mutator) repoAllowed(image string) bool {
-	allowed := false
-	for _, allowedDomain := range m.config.AllowedDomains {
-		allowed = strings.HasPrefix(image, allowedDomain)
-		if allowed {
-			break
-		}
+	if config.DefaultDomain == "" {
+		log.Printf("defaultDomain not configured, using registry-1.docker.io\n")
+		config.DefaultDomain = "registry-1.docker.io"
 	}
 
-	return allowed
+	if defaultMap, ok := config.DomainMapping[config.DefaultDomain]; !ok || defaultMap == "" {
+		return Mutator{}, fmt.Errorf("Default domain not mapped. Please configure a mapping for %v", config.DefaultDomain)
+	}
+
+	return Mutator{config: config}, nil
+
 }
 
 func (m Mutator) hasDomain(image string) (string, bool) {
@@ -80,23 +77,20 @@ func (m Mutator) mutate(r v1beta1.AdmissionReview) (v1beta1.AdmissionResponse, e
 
 	patches := []map[string]string{}
 	for i, c := range pod.Spec.Containers {
-		log.Println("processing image: ", c.Image)
+		newImage := c.Image
 
-		//check if image is pulled from allowed registry
-		if !m.repoAllowed(c.Image) {
-			log.Printf("Image %v not allowed\n", c.Image)
-			var newImage string
-			//if not allowed check if this repo has fqdn or no domain
-			if domain, hasDomain := m.hasDomain(c.Image); hasDomain {
+		//Check if this repo has fqdn or no domain
+		domain, hasDomain := m.hasDomain(c.Image)
+		if !hasDomain { //if no domain given we'll use the configured defaultDomain
+			domain = m.config.DefaultDomain
+			newImage = fmt.Sprintf("%v/%v", domain, c.Image)
+			log.Printf("Image %v has no domain, using default domain: %v", c.Image, domain)
+		}
 
-				newImage = strings.ReplaceAll(c.Image, domain, m.config.DefaultDomain)
-				log.Printf("Image has domain specified, replacing with default domain. New image name: %v\n", newImage)
-
-			} else {
-
-				newImage = fmt.Sprintf("%v/%v", m.config.DefaultDomain, c.Image)
-				log.Printf("Image has NO domain specified, Adding with domain. New image name: %v\n", newImage)
-			}
+		//let's map the domain to the desired domain. Of we don't have a mapping we won't patch the json
+		if mappedDomain, ok := m.config.DomainMapping[domain]; ok {
+			newImage = strings.ReplaceAll(newImage, domain, mappedDomain)
+			log.Printf("Image %v is now: %v\n", c.Image, newImage)
 
 			patch := map[string]string{
 				"op":    "replace",
