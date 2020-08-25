@@ -79,7 +79,7 @@ spec:
 EOF
 
 echo "Waiting for CSR to be availabe..."
-kubectl wait csr/${CSR_NAME} -for condition="available" --timeout=60s
+kubectl wait csr/${CSR_NAME} --for=condition="available" --timeout=5s
 echo "Signing CSR..."
 kubectl certificate approve ${CSR_NAME}
 
