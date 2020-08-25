@@ -10,15 +10,17 @@ description:
 options:    
     -i [image]             The docker image to use (defaults to: $DEFAULT_IMAGE) 
     -n [namespace]         Namespace the app will be deployed to
+    -a [app name]          App name to use
     -c [config file]       config json file. see config-example.json
 "
 }
  
-while getopts i:n:c: flag
+while getopts i:n:a:c: flag
 do
   case $flag in    
     i) IMAGE=$OPTARG;;
     n) NAMESPACE=$OPTARG;;    
+    a) APP=$OPTARG;;    
     c) CONFIG_FILE=$OPTARG;;    
     *) usage ; exit 1;;
   esac
@@ -49,7 +51,6 @@ if [[ ! -f $CONFIG_FILE ]]; then
 fi
 
 FULLPATH=$(dirname  "$0")
-APP="k8s-mutate-registry" 
 CONFIG_JSON=$(cat $CONFIG_FILE | tr -d '\n' | tr -d ' ')
 CA_BUNDLE=$(cat ${APP}.cabundle)
 
@@ -62,7 +63,9 @@ YAML="$(mktemp)"
 export IMAGE
 export CA_BUNDLE
 export CONFIG_JSON
-envsubst '${IMAGE} ${CA_BUNDLE} ${CONFIG_JSON}' <${APP}.yml > $YAML
+export NAMESPACE
+export APP
+envsubst '${IMAGE} ${CA_BUNDLE} ${CONFIG_JSON} ${NAMESPACE}, ${APP}' <k8s-mutate-registry.yml > $YAML
 
 echo "Applying yaml..."
-kubectl apply -f $YAML -n $NAMESPACE
+kubectl apply -f $YAML
