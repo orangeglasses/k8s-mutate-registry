@@ -23,4 +23,4 @@ When running the script a configure json needs to be specified. The config json 
  - The domain Mapping is simply a key/value list of externel and internal registry domain names. In the above example, if you pull an image from quay.io; let's say quaiy.io/ubuntu then the image will be overwritten as internal-quay.example.internal/ubunt
  
  ### namespace labels
- The webhook config that comes in the deploy folder will only be active on namespaces with a label: <app name>: enabled. <app name> is the app name you configured when running the deploy.sh script.
+ The webhook config that comes in the deploy folder will only be active on namespaces with a label: APP_NAME: enabled. APP_NAME is the app name you configured when running the deploy.sh script.
