@@ -54,6 +54,10 @@ func (m Mutator) hasDomain(image string) (string, bool) {
 	return "", false
 }
 
+func (m Mutator) hasOrg(image string) bool {
+	return strings.Contains(image, "/")
+}
+
 func (m Mutator) mutate(r v1beta1.AdmissionReview) (v1beta1.AdmissionResponse, error) {
 	patchType := v1beta1.PatchTypeJSONPatch
 	response := v1beta1.AdmissionResponse{
@@ -85,6 +89,11 @@ func (m Mutator) mutate(r v1beta1.AdmissionReview) (v1beta1.AdmissionResponse, e
 			domain = m.config.DefaultDomain
 			newImage = fmt.Sprintf("%v/%v", domain, c.Image)
 			log.Printf("Image %v has no domain, using default domain: %v", c.Image, domain)
+		}
+
+		if !m.hasOrg(c.Image) {
+			var domainPlusOrg = fmt.Sprintf("%v/%v", domain, "library")
+			newImage = strings.ReplaceAll(newImage, domain, domainPlusOrg)
 		}
 
 		//let's map the domain to the desired domain. Of we don't have a mapping we won't patch the json
