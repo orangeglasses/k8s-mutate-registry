@@ -58,6 +58,31 @@ func (m Mutator) hasOrg(image string) bool {
 	return strings.Contains(image, "/")
 }
 
+func (m Mutator) mutateImage(image string) (string, bool) {
+	newImage := image
+	mutated := false
+
+	domain, hasDomain := m.hasDomain(image)
+	if !hasDomain { //if no domain given we'll use the configured defaultDomain
+		domain = m.config.DefaultDomain
+		newImage = fmt.Sprintf("%v/%v", domain, image)
+		log.Printf("Image %v has no domain, using default domain: %v", image, domain)
+	}
+
+	if !m.hasOrg(image) {
+		var domainPlusOrg = fmt.Sprintf("%v/%v", domain, "library")
+		newImage = strings.ReplaceAll(newImage, domain, domainPlusOrg)
+	}
+
+	//let's map the domain to the desired domain. Of we don't have a mapping we won't patch the json
+	if mappedDomain, ok := m.config.DomainMapping[domain]; ok {
+		newImage = strings.ReplaceAll(newImage, domain, mappedDomain)
+		mutated = true
+	}
+
+	return newImage, mutated
+}
+
 func (m Mutator) mutate(r v1beta1.AdmissionReview) (v1beta1.AdmissionResponse, error) {
 	patchType := v1beta1.PatchTypeJSONPatch
 	response := v1beta1.AdmissionResponse{
@@ -65,7 +90,7 @@ func (m Mutator) mutate(r v1beta1.AdmissionReview) (v1beta1.AdmissionResponse, e
 		UID:       r.Request.UID,
 		PatchType: &patchType,
 		AuditAnnotations: map[string]string{
-			"k8s-mutate-registry": "Container registry mutated by HaaS platform",
+			"k8s-mutate-registry": "Container registry mutated by mutatingwebhook k8s-mutate-registry",
 		},
 	}
 
@@ -81,29 +106,24 @@ func (m Mutator) mutate(r v1beta1.AdmissionReview) (v1beta1.AdmissionResponse, e
 
 	patches := []map[string]string{}
 	for i, c := range pod.Spec.Containers {
-		newImage := c.Image
-
-		//Check if this repo has fqdn or no domain
-		domain, hasDomain := m.hasDomain(c.Image)
-		if !hasDomain { //if no domain given we'll use the configured defaultDomain
-			domain = m.config.DefaultDomain
-			newImage = fmt.Sprintf("%v/%v", domain, c.Image)
-			log.Printf("Image %v has no domain, using default domain: %v", c.Image, domain)
-		}
-
-		if !m.hasOrg(c.Image) {
-			var domainPlusOrg = fmt.Sprintf("%v/%v", domain, "library")
-			newImage = strings.ReplaceAll(newImage, domain, domainPlusOrg)
-		}
-
-		//let's map the domain to the desired domain. Of we don't have a mapping we won't patch the json
-		if mappedDomain, ok := m.config.DomainMapping[domain]; ok {
-			newImage = strings.ReplaceAll(newImage, domain, mappedDomain)
-			log.Printf("Image %v is now: %v\n", c.Image, newImage)
-
+		newImage, mutated := m.mutateImage(c.Image)
+		if mutated {
 			patch := map[string]string{
 				"op":    "replace",
 				"path":  fmt.Sprintf("/spec/containers/%d/image", i),
+				"value": newImage,
+			}
+
+			patches = append(patches, patch)
+		}
+	}
+
+	for i, c := range pod.Spec.InitContainers {
+		newImage, mutated := m.mutateImage(c.Image)
+		if mutated {
+			patch := map[string]string{
+				"op":    "replace",
+				"path":  fmt.Sprintf("/spec/initContainers/%d/image", i),
 				"value": newImage,
 			}
 
