@@ -44,7 +44,8 @@ func newMutator(configJSON string) (Mutator, error) {
 
 func (m Mutator) hasDomain(image string) (string, bool) {
 	//get domain part
-	sSplit := strings.Split(image, "/")
+	cSplit := strings.Split(image, ":")
+	sSplit := strings.Split(cSplit[0], "/")
 
 	//if there is a dot in the host part we are going to assume this is an fqdn, if no dot present we assume default repo
 	if strings.Contains(sSplit[0], ".") {
@@ -61,6 +62,8 @@ func (m Mutator) hasOrg(image string) bool {
 func (m Mutator) mutateImage(image string) (string, bool) {
 	newImage := image
 	mutated := false
+
+	log.Printf("Processing image: %v\n", image)
 
 	domain, hasDomain := m.hasDomain(image)
 	if !hasDomain { //if no domain given we'll use the configured defaultDomain
@@ -101,6 +104,8 @@ func (m Mutator) mutate(r v1beta1.AdmissionReview) (v1beta1.AdmissionResponse, e
 	var pod corev1.Pod
 	err := json.Unmarshal(r.Request.Object.Raw, &pod)
 	if err != nil {
+		log.Println("Unable to unmarshall pod json. received json below: ")
+		log.Println(r.Request.Object.Raw)
 		return response, fmt.Errorf("Unable to unmarshall pod json: %v", err.Error())
 	}
 
