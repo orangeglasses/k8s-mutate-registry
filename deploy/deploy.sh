@@ -52,7 +52,6 @@ fi
 
 FULLPATH=$(dirname  "$0")
 CONFIG_JSON=$(cat $CONFIG_FILE | tr -d '\n' | tr -d ' ')
-CA_BUNDLE=$(cat ${APP}.cabundle)
 
 echo "Creating TLS cert... " 
 $FULLPATH/ssl.sh -a $APP -n $NAMESPACE
@@ -61,7 +60,7 @@ echo "Parsing template..."
 YAML="$(mktemp)"
 
 export IMAGE
-export CA_BUNDLE
+export CA_BUNDLE=$(cat ${APP}.cabundle)
 export CONFIG_JSON
 export NAMESPACE
 export APP
