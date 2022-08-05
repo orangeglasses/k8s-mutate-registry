@@ -1,23 +1,7 @@
-#!/bin/bash
-
-usage () {
-echo -e "usage: $0 -a <app name> -n <namespace> 
-description:
-    Creates a TLS cert for a k8s app. Signs the cert in k8s. Operates on current context in kubeconfig.
-    Developed for deploying the k8s-mutate-registry app
-
-options:    
-    -a [app name]          The name of the app
-    -n [namespace]         Namespace the app will be deployed to
-"
-}
-
- 
-while getopts a:n: flag
 do
-  case $flag in    
+  case $flag in
     a) APP=$OPTARG;;
-    n) NAMESPACE=$OPTARG;;    
+    n) NAMESPACE=$OPTARG;;
     *) usage ; exit 1;;
   esac
 done
@@ -49,7 +33,7 @@ distinguished_name = req_distinguished_name
 [ v3_req ]
 basicConstraints = CA:FALSE
 keyUsage = nonRepudiation, digitalSignature, keyEncipherment
-extendedKeyUsage = serverAuth
+extendedKeyUsage = clientAuth, serverAuth
 subjectAltName = @alt_names
 [alt_names]
 DNS.1 = ${APP}
@@ -57,21 +41,22 @@ DNS.2 = ${APP}.${NAMESPACE}
 DNS.3 = ${CSR_NAME}
 DNS.4 = ${CSR_NAME}.cluster.local
 EOF
-openssl req -new -key ${APP}.key -subj "/CN=${CSR_NAME}" -out ${APP}.csr -config csr.conf
+openssl req -new -key ${APP}.key -subj="/O=system:nodes/CN=system:node:${CSR_NAME}.svc.cluster.local" -out ${APP}.csr -config csr.conf
 
 echo "Deleting existing csr, if any ..."
 kubectl delete csr ${CSR_NAME} || :
 
 echo "Creating kubernetes CSR object ..."
 kubectl create -f - <<EOF
-apiVersion: certificates.k8s.io/v1beta1
+apiVersion: certificates.k8s.io/v1
 kind: CertificateSigningRequest
 metadata:
   name: ${CSR_NAME}
 spec:
   groups:
-  - system:authenticated
+  - system:nodes
   request: $(cat ${APP}.csr | base64 | tr -d '\n')
+  signerName: kubernetes.io/kubelet-serving
   usages:
   - digital signature
   - key encipherment
@@ -85,7 +70,7 @@ kubectl certificate approve ${CSR_NAME}
 
 SECONDS=0
 while true; do
-  echo "Waiting for serverCert to be present in kubernetes ..."  
+  echo "Waiting for serverCert to be present in kubernetes ..."
   serverCert=$(kubectl get csr ${CSR_NAME} -o jsonpath='{.status.certificate}')
   if [ $serverCert != "" ]; then
     break
